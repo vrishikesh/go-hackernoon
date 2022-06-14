@@ -29,14 +29,19 @@ func main() {
 		description = flag.String("description", `div.tldr`, "TLDR")
 		concurrency = flag.Int("concurrency", 3, "Concurrency")
 	)
+	flag.Parse()
 
 	tasks := make(chan Task)
+	results := make(chan Result)
+
 	go generateTasks(*url, *title, tasks)
 
-	results := make(chan Result)
 	wg := new(sync.WaitGroup)
 	wg.Add(*concurrency)
-	go closeResults(wg, results)
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	for i := 0; i < *concurrency; i++ {
 		go pushToResult(wg, tasks, results, *description)
@@ -45,11 +50,6 @@ func main() {
 	for r := range results {
 		log.Printf("Url: %s\nTitle: %s\nDescription: %s\n\n\n", r.Url, r.Title, r.Description)
 	}
-}
-
-func closeResults(wg *sync.WaitGroup, results chan Result) {
-	wg.Wait()
-	close(results)
 }
 
 func pushToResult(wg *sync.WaitGroup, tasks chan Task, results chan Result, description string) {
